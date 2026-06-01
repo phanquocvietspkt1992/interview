@@ -10,12 +10,12 @@ Track each item with `- [x]` when done, `- [ ]` when pending.
 
 ### Concepts to Review
 
-- [ ] What is a Monolith
-- [ ] Problems of a Monolith
-- [ ] Why Microservices
-- [ ] Domain Driven Design (DDD)
-- [ ] Bounded Context
-- [ ] Service Boundary
+- [x] What is a Monolith
+- [x] Problems of a Monolith
+- [x] Why Microservices
+- [x] Domain Driven Design (DDD)
+- [x] Bounded Context
+- [x] Service Boundary
 
 ---
 
@@ -154,12 +154,12 @@ Map each domain concept to a service boundary:
 
 ### Phase 1 Review Checklist
 
-- [ ] Can explain the monolith structure and its trade-offs
-- [ ] Can name at least 5 problems with a monolith
-- [ ] Can explain what DDD is and why it matters for microservices
-- [ ] Can draw the Banking bounded contexts on a whiteboard
-- [ ] Can explain why each service must own its own database
-- [ ] Can walk through the Transfer flow in the monolith and identify what breaks at scale
+- [x] Can explain the monolith structure and its trade-offs
+- [x] Can name at least 5 problems with a monolith
+- [x] Can explain what DDD is and why it matters for microservices
+- [x] Can draw the Banking bounded contexts on a whiteboard
+- [x] Can explain why each service must own its own database
+- [x] Can walk through the Transfer flow in the monolith and identify what breaks at scale
 
 ---
 
