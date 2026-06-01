@@ -1,0 +1,32 @@
+{
+  "C# Class with File-Scoped Namespace": {
+    "prefix": "csclass",
+    "body": [
+      "using System;",
+      "",
+      "namespace ${1:Grab.Models};",
+      "",
+      "public class ${2:ClassName}",
+      "{",
+      "    ${3}",
+      "}"
+    ],
+    "description": "Insert a C# class with using and file-scoped namespace"
+  },
+  "C# API Controller with File-Scoped Namespace": {
+    "prefix": "cscontroller",
+    "body": [
+      "using Microsoft.AspNetCore.Mvc;",
+      "",
+      "namespace ${1:Grab.Controllers};",
+      "",
+      "[ApiController]",
+      "[Route(\"api/[controller]\")]",
+      "public class ${2:ValuesController} : ControllerBase",
+      "{",
+      "    ${3}",
+      "}"
+    ],
+    "description": "Insert an API controller with using and file-scoped namespace"
+  }
+}
