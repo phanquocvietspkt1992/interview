@@ -1,0 +1,6 @@
+@banking_monolithic_HostAddress = http://localhost:5278
+
+GET {{banking_monolithic_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
