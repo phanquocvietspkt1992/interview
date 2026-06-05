@@ -1,0 +1,15 @@
+{
+  "folders": [
+    {
+      "name": "banking-microservices",
+      "path": "banking-microservices"
+    },
+    {
+      "name": "BankingApp (Monolith)",
+      "path": "BankingApp"
+    }
+  ],
+  "settings": {
+    "dotnet.defaultSolution": "banking-microservices/banking-microservices.sln"
+  }
+}
