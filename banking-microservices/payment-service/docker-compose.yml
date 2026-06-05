@@ -1,0 +1,27 @@
+services:
+
+  payment-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1439:1433"
+    volumes:
+      - payment-db-data:/var/opt/mssql
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: src/PaymentService.API/Dockerfile
+    ports:
+      - "5006:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__PaymentDb: "Server=payment-db;Database=PaymentServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      - payment-db
+
+volumes:
+  payment-db-data:

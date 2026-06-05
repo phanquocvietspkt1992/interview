@@ -1,0 +1,211 @@
+services:
+
+  # ── Databases (one per service — no shared DB) ─────────────────────────────
+
+  identity-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1435:1433"
+    volumes:
+      - identity-db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  account-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1434:1433"
+    volumes:
+      - account-db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  transaction-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1436:1433"
+    volumes:
+      - transaction-db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  loan-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1437:1433"
+    volumes:
+      - loan-db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  notification-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1438:1433"
+    volumes:
+      - notification-db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  payment-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1439:1433"
+    volumes:
+      - payment-db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Microservices ──────────────────────────────────────────────────────────
+
+  identity-service:
+    build:
+      context: ./identity-service
+      dockerfile: src/IdentityService.API/Dockerfile
+    ports:
+      - "5002:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__IdentityDb: "Server=identity-db;Database=IdentityServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      identity-db:
+        condition: service_healthy
+
+  account-service:
+    build:
+      context: ./account-service
+      dockerfile: src/AccountService.API/Dockerfile
+    ports:
+      - "5001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__AccountDb: "Server=account-db;Database=AccountServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      account-db:
+        condition: service_healthy
+
+  transaction-service:
+    build:
+      context: ./transaction-service
+      dockerfile: src/TransactionService.API/Dockerfile
+    ports:
+      - "5003:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__TransactionDb: "Server=transaction-db;Database=TransactionServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      transaction-db:
+        condition: service_healthy
+
+  loan-service:
+    build:
+      context: ./loan-service
+      dockerfile: src/LoanService.API/Dockerfile
+    ports:
+      - "5004:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__LoanDb: "Server=loan-db;Database=LoanServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      loan-db:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: src/NotificationService.API/Dockerfile
+    ports:
+      - "5005:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__NotificationDb: "Server=notification-db;Database=NotificationServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      notification-db:
+        condition: service_healthy
+
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: src/PaymentService.API/Dockerfile
+    ports:
+      - "5006:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__PaymentDb: "Server=payment-db;Database=PaymentServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      payment-db:
+        condition: service_healthy
+
+  # ── API Gateway (single entry point for all clients) ───────────────────────
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: src/ApiGateway/Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ReverseProxy__Clusters__identity-cluster__Destinations__identity-1__Address: "http://identity-service:8080"
+      ReverseProxy__Clusters__account-cluster__Destinations__account-1__Address: "http://account-service:8080"
+      ReverseProxy__Clusters__transaction-cluster__Destinations__transaction-1__Address: "http://transaction-service:8080"
+      ReverseProxy__Clusters__loan-cluster__Destinations__loan-1__Address: "http://loan-service:8080"
+      ReverseProxy__Clusters__notification-cluster__Destinations__notification-1__Address: "http://notification-service:8080"
+      ReverseProxy__Clusters__payment-cluster__Destinations__payment-1__Address: "http://payment-service:8080"
+    depends_on:
+      - identity-service
+      - account-service
+      - transaction-service
+      - loan-service
+      - notification-service
+      - payment-service
+
+volumes:
+  identity-db-data:
+  account-db-data:
+  transaction-db-data:
+  loan-db-data:
+  notification-db-data:
+  payment-db-data:

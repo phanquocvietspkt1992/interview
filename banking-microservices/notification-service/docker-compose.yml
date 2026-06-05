@@ -1,0 +1,27 @@
+services:
+
+  notification-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1438:1433"
+    volumes:
+      - notification-db-data:/var/opt/mssql
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: src/NotificationService.API/Dockerfile
+    ports:
+      - "5005:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__NotificationDb: "Server=notification-db;Database=NotificationServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      - notification-db
+
+volumes:
+  notification-db-data:

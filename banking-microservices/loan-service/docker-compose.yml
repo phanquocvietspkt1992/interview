@@ -1,0 +1,27 @@
+services:
+
+  loan-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Banking@123!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1437:1433"
+    volumes:
+      - loan-db-data:/var/opt/mssql
+
+  loan-service:
+    build:
+      context: .
+      dockerfile: src/LoanService.API/Dockerfile
+    ports:
+      - "5004:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__LoanDb: "Server=loan-db;Database=LoanServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+    depends_on:
+      - loan-db
+
+volumes:
+  loan-db-data:
