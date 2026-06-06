@@ -3,7 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AccountService.Domain\AccountService.Domain.csproj" />
     <ProjectReference Include="..\AccountService.Application\AccountService.Application.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\BuildingBlocks\BuildingBlocks.Messaging\BuildingBlocks.Messaging.csproj" />
+    <ProjectReference Include="..\..\..\src\BuildingBlocks\BuildingBlocks.Messaging\BuildingBlocks.Messaging.csproj" />
   </ItemGroup>
 
   <ItemGroup>

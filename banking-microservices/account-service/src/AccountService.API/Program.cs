@@ -6,28 +6,25 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Services ───────────────────────────────────────────────────────────────
-
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Infrastructure: EF Core + Repository + EventPublisher
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// Application: MediatR scans the Application assembly for all IRequestHandler<> implementations
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(CreateAccountCommand).Assembly));
 
-// ── Middleware ─────────────────────────────────────────────────────────────
-
 var app = builder.Build();
 
-// Auto-apply migrations on startup (dev convenience — use proper CI/CD in production)
+// EnsureCreated creates the Oracle schema on first startup — no migration files needed.
+// For production use proper migration tooling (dotnet ef database update).
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AccountDbContext>();
-    await db.Database.MigrateAsync();
+    await db.Database.EnsureCreatedAsync();
 }
 
 if (app.Environment.IsDevelopment())
@@ -39,7 +36,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthorization();
 
-// Global exception handler — converts domain exceptions to proper HTTP status codes
 app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
@@ -60,8 +56,3 @@ app.UseExceptionHandler(errorApp =>
 
 app.MapControllers();
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

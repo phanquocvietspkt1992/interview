@@ -85,6 +85,8 @@ services:
 
   # AccountService  →  Oracle XE (enterprise banking core, COBOL migration path)
   # platform: linux/amd64 required — Oracle XE has no ARM64 image; runs under Rosetta on Apple Silicon
+  # No named volume: Docker Desktop on Mac creates volumes owned by root, but Oracle runs as uid 54321
+  # and gets "Permission denied". For dev/interview use the container layer is fine (data resets on rm).
   account-db:
     image: gvenzl/oracle-xe:21-slim
     platform: linux/amd64
@@ -94,8 +96,6 @@ services:
       APP_USER_PASSWORD: "AccountSvc123"
     ports:
       - "1521:1521"
-    volumes:
-      - account-db-data:/opt/oracle/oradata
     healthcheck:
       test: ["CMD", "healthcheck.sh"]
       interval: 30s
@@ -303,7 +303,7 @@ services:
 
 volumes:
   identity-db-data:
-  account-db-data:
+  # account-db-data removed — Oracle XE on Mac needs no named volume (permission issue with uid 54321)
   transaction-db-data:
   loan-db-data:
   notification-db-data:
