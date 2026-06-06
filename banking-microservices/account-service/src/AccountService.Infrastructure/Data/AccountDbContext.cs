@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AccountService.Infrastructure.Data;
 
 /// <summary>
-/// This service's OWN database — one of the core microservice rules.
-/// No other service touches this DB directly.
+/// AccountService uses Oracle XE — demonstrating polyglot persistence.
+/// Oracle is common in enterprise banking (COBOL/mainframe migration paths).
 /// </summary>
 public class AccountDbContext(DbContextOptions<AccountDbContext> options) : DbContext(options)
 {
@@ -28,12 +28,14 @@ public class AccountDbContext(DbContextOptions<AccountDbContext> options) : DbCo
                   .HasPrecision(18, 4);
 
             entity.Property(a => a.Type)
-                  .HasConversion<string>();    // Store enum as "Checking", "Savings", etc.
+                  .HasConversion<string>()
+                  .HasMaxLength(20);
 
             entity.Property(a => a.Status)
-                  .HasConversion<string>();
+                  .HasConversion<string>()
+                  .HasMaxLength(20);
 
-            // Ignore the in-memory domain events collection — not persisted
+            entity.HasIndex(a => a.CustomerId);
             entity.Ignore(a => a.DomainEvents);
         });
     }

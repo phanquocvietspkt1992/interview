@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using PaymentService.Application.Commands.InitiatePayment;
 using PaymentService.Domain.Exceptions;
 using PaymentService.Infrastructure;
@@ -17,10 +16,11 @@ builder.Services.AddMediatR(cfg =>
 
 var app = builder.Build();
 
+// Initialize CosmosDB database + container on startup
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
-    await db.Database.MigrateAsync();
+    var cosmos = scope.ServiceProvider.GetRequiredService<CosmosDbContext>();
+    await cosmos.InitializeAsync();
 }
 
 if (app.Environment.IsDevelopment())

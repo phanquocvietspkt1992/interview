@@ -3,7 +3,7 @@ using LoanService.Domain.Repositories;
 using LoanService.Infrastructure.Data;
 using LoanService.Infrastructure.Messaging;
 using LoanService.Infrastructure.Repositories;
-using Microsoft.EntityFrameworkCore;
+using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,11 +15,25 @@ public static class InfrastructureServiceRegistration
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddDbContext<LoanDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("LoanDb")));
-
-        services.AddScoped<ILoanRepository, LoanRepository>();
+        // ── MongoDB ────────────────────────────────────────────────────────
+        // LoanService uses MongoDB: flexible schema for different loan products,
+        // embedded PaymentHistory documents, no schema migrations needed.
+        services.AddSingleton<MongoDbContext>();
+        services.AddScoped<ILoanRepository, LoanMongoRepository>();
         services.AddScoped<IEventPublisher, LoggingEventPublisher>();
+
+        // ── MassTransit + RabbitMQ ─────────────────────────────────────────
+        services.AddMassTransit(x =>
+        {
+            x.UsingRabbitMq((ctx, cfg) =>
+            {
+                cfg.Host(configuration["RabbitMq__Host"] ?? "localhost", "/", h =>
+                {
+                    h.Username(configuration["RabbitMq__Username"] ?? "guest");
+                    h.Password(configuration["RabbitMq__Password"] ?? "guest");
+                });
+            });
+        });
 
         return services;
     }

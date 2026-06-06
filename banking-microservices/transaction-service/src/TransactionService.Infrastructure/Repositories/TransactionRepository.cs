@@ -19,11 +19,15 @@ public class TransactionRepository(TransactionDbContext db, IEventPublisher even
              .Take(pageSize)
              .ToListAsync(ct);
 
+    /// <summary>
+    /// Tracks the entity — does NOT call SaveChanges.
+    /// Caller (e.g. command handler via IUnitOfWork) is responsible for committing.
+    /// This allows atomic writes across multiple repositories.
+    /// </summary>
     public async Task AddAsync(Transaction transaction, CancellationToken ct)
     {
         await db.Transactions.AddAsync(transaction, ct);
-        await db.SaveChangesAsync(ct);
-        await DispatchEventsAsync(transaction, ct);
+        // SaveChanges deliberately omitted — IUnitOfWork.CommitAsync handles it
     }
 
     public async Task UpdateAsync(Transaction transaction, CancellationToken ct)

@@ -6,16 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AccountService.Infrastructure.Repositories;
 
-/// <summary>
-/// Concrete EF Core implementation of IAccountRepository.
-///
-/// Key pattern: after every write operation we:
-///   1. SaveChanges() — commits to DB
-///   2. Dispatch domain events — notifies other services via the message bus
-///
-/// Why after SaveChanges()?
-///   If the DB commit fails, we don't want to send events for something that didn't happen.
-/// </summary>
 public class AccountRepository(
     AccountDbContext db,
     IEventPublisher eventPublisher
@@ -36,19 +26,18 @@ public class AccountRepository(
         await SaveAndDispatchEventsAsync(account, ct);
     }
 
-    // ── Private ────────────────────────────────────────────────────────────
+    public async Task UpdateAsync(Account account, CancellationToken ct = default)
+    {
+        db.Accounts.Update(account);
+        await SaveAndDispatchEventsAsync(account, ct);
+    }
 
     private async Task SaveAndDispatchEventsAsync(Account account, CancellationToken ct)
     {
-        // Collect events BEFORE saving (EF tracking might clear state)
         var events = account.DomainEvents.ToList();
-
-        await db.SaveChangesAsync(ct);      // 1. Commit to DB first
-
-        // 2. Dispatch events — other services (notification, audit, fraud) will react
+        await db.SaveChangesAsync(ct);
         foreach (var domainEvent in events)
             await eventPublisher.PublishAsync(domainEvent, ct);
-
         account.ClearDomainEvents();
     }
 }

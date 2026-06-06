@@ -5,5 +5,6 @@ public enum PaymentNetwork
     Swift,
     Ach,
     Sepa,
-    Domestic
+    Domestic,
+    Internal   // for intra-bank transfers (saga-driven)
 }

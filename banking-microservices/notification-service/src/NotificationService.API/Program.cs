@@ -1,8 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using NotificationService.Application.Commands.SendNotification;
 using NotificationService.Domain.Exceptions;
 using NotificationService.Infrastructure;
-using NotificationService.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,11 +15,7 @@ builder.Services.AddMediatR(cfg =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
-    await db.Database.MigrateAsync();
-}
+// Cassandra schema is created in CassandraContext constructor — no explicit step needed
 
 if (app.Environment.IsDevelopment())
 {

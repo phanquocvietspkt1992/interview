@@ -1,4 +1,7 @@
+using System.Text.Json;
+using BuildingBlocks.Messaging.IntegrationEvents;
 using MediatR;
+using TransactionService.Application.Common;
 using TransactionService.Application.DTOs;
 using TransactionService.Domain.Entities;
 using TransactionService.Domain.Enums;
@@ -14,7 +17,9 @@ public record InitiateTransferCommand(
 ) : IRequest<TransactionDto>;
 
 public class InitiateTransferCommandHandler(
-    ITransactionRepository repository
+    ITransactionRepository transactionRepository,
+    IOutboxRepository outboxRepository,
+    IUnitOfWork unitOfWork
 ) : IRequestHandler<InitiateTransferCommand, TransactionDto>
 {
     public async Task<TransactionDto> Handle(InitiateTransferCommand cmd, CancellationToken ct)
@@ -26,11 +31,31 @@ public class InitiateTransferCommandHandler(
             TransactionType.Transfer,
             cmd.Description);
 
-        // In a real system, this would call account-service to debit/credit accounts
-        // and use a Saga to coordinate. For now we complete immediately.
-        transaction.Complete();
+        // ── Outbox Pattern ──────────────────────────────────────────────────
+        // PROBLEM: If we save the Transaction to DB and then publish to RabbitMQ,
+        // and the RabbitMQ publish fails (network blip, broker down), we have a saga that
+        // never starts — money is neither moved nor the transaction marked failed.
+        //
+        // SOLUTION: Write Transaction + OutboxMessage atomically in ONE SaveChanges().
+        // The OutboxProcessor (BackgroundService) reliably publishes the message later.
+        // Even if the service crashes before publishing, the next startup will re-publish.
 
-        await repository.AddAsync(transaction, ct);
+        var correlationId = Guid.NewGuid();
+        var sagaEvent = new TransferSagaStarted(
+            correlationId,
+            transaction.Id,
+            transaction.FromAccountId,
+            transaction.ToAccountId ?? Guid.Empty,
+            transaction.Amount);
+
+        await transactionRepository.AddAsync(transaction, ct);
+        await outboxRepository.AddAsync(
+            typeof(TransferSagaStarted).AssemblyQualifiedName!,
+            JsonSerializer.Serialize(sagaEvent),
+            ct);
+
+        await unitOfWork.CommitAsync(ct); // one atomic DB transaction
+
         return transaction.ToDto();
     }
 }

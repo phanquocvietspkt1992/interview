@@ -13,6 +13,7 @@ public interface IAccountRepository
     Task<Account?> GetByAccountNumberAsync(string number, CancellationToken ct = default);
     Task<List<Account>> GetByCustomerIdAsync(Guid customerId, CancellationToken ct = default);
     Task AddAsync(Account account, CancellationToken ct = default);
+    Task UpdateAsync(Account account, CancellationToken ct = default);
 
     // No Delete — accounts are closed (soft-delete via Status), never hard-deleted.
 }

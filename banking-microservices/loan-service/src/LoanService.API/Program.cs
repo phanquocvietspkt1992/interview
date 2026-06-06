@@ -1,8 +1,6 @@
 using LoanService.Application.Commands.ApplyForLoan;
 using LoanService.Domain.Exceptions;
 using LoanService.Infrastructure;
-using LoanService.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,11 +15,7 @@ builder.Services.AddMediatR(cfg =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<LoanDbContext>();
-    await db.Database.MigrateAsync();
-}
+// MongoDB creates collections/indexes on first use — no migration step needed
 
 if (app.Environment.IsDevelopment())
 {

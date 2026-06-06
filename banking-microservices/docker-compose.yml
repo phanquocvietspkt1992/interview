@@ -1,7 +1,72 @@
 services:
 
-  # ── Databases (one per service — no shared DB) ─────────────────────────────
+  # ══════════════════════════════════════════════════════════════════════════
+  # INFRASTRUCTURE
+  # ══════════════════════════════════════════════════════════════════════════
 
+  # ── Message Brokers ────────────────────────────────────────────────────────
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports:
+      - "5672:5672"     # AMQP protocol
+      - "15672:15672"   # Management UI  →  http://localhost:15672  (guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8090:8080"     # Kafka UI  →  http://localhost:8090
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ── Databases (polyglot persistence — each service gets its own) ───────────
+
+  # IdentityService  →  MSSQL (relational, transactional user data)
   identity-db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
@@ -18,22 +83,25 @@ services:
       timeout: 5s
       retries: 10
 
+  # AccountService  →  Oracle XE (enterprise banking core, COBOL migration path)
   account-db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: gvenzl/oracle-xe:21-slim
     environment:
-      SA_PASSWORD: "Banking@123!"
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: "Developer"
+      ORACLE_PASSWORD: "Oracle123"
+      APP_USER: "accountservice"
+      APP_USER_PASSWORD: "AccountSvc123"
     ports:
-      - "1434:1433"
+      - "1521:1521"
     volumes:
-      - account-db-data:/var/opt/mssql
+      - account-db-data:/opt/oracle/oradata
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 180s  # Oracle XE takes ~2 min to start
 
+  # TransactionService  →  MSSQL + Outbox (ACID + reliable messaging)
   transaction-db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
@@ -50,157 +118,187 @@ services:
       timeout: 5s
       retries: 10
 
+  # LoanService  →  MongoDB (flexible schema, nested payment history docs)
   loan-db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      SA_PASSWORD: "Banking@123!"
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: "Developer"
+    image: mongo:7.0
     ports:
-      - "1437:1433"
+      - "27017:27017"
     volumes:
-      - loan-db-data:/var/opt/mssql
+      - loan-db-data:/data/db
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
 
+  # NotificationService  →  Cassandra (high-volume writes, time-series by customerId)
   notification-db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      SA_PASSWORD: "Banking@123!"
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: "Developer"
+    image: cassandra:5.0
     ports:
-      - "1438:1433"
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: "BankingCluster"
+      CASSANDRA_DC: "datacenter1"
+      HEAP_NEWSIZE: "128M"
+      MAX_HEAP_SIZE: "512M"
     volumes:
-      - notification-db-data:/var/opt/mssql
+      - notification-db-data:/var/lib/cassandra
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
       retries: 10
+      start_period: 60s
 
+  # PaymentService  →  CosmosDB Emulator (global distribution, multi-region writes)
   payment-db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      SA_PASSWORD: "Banking@123!"
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: "Developer"
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
     ports:
-      - "1439:1433"
+      - "8081:8081"
+      - "10250-10255:10250-10255"
+    environment:
+      AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 10
+      AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "true"
     volumes:
-      - payment-db-data:/var/opt/mssql
+      - payment-db-data:/tmp/cosmos/appdata
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Banking@123!", "-C", "-Q", "SELECT 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "https://localhost:8081/_explorer/emulator.pem", "-k"]
+      interval: 30s
+      timeout: 10s
       retries: 10
+      start_period: 60s
 
-  # ── Microservices ──────────────────────────────────────────────────────────
+  # ══════════════════════════════════════════════════════════════════════════
+  # MICROSERVICES
+  # ══════════════════════════════════════════════════════════════════════════
 
-  identity-service:
-    build:
-      context: ./identity-service
-      dockerfile: src/IdentityService.API/Dockerfile
-    ports:
-      - "5002:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__IdentityDb: "Server=identity-db;Database=IdentityServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
-    depends_on:
-      identity-db:
-        condition: service_healthy
+  # identity-service:
+  #   build:
+  #     context: ./identity-service
+  #     dockerfile: src/IdentityService.API/Dockerfile
+  #   ports:
+  #     - "5002:8080"
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ConnectionStrings__IdentityDb: "Server=identity-db;Database=IdentityServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+  #     RabbitMq__Host: rabbitmq
+  #   depends_on:
+  #     identity-db:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
 
-  account-service:
-    build:
-      context: ./account-service
-      dockerfile: src/AccountService.API/Dockerfile
-    ports:
-      - "5001:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__AccountDb: "Server=account-db;Database=AccountServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
-    depends_on:
-      account-db:
-        condition: service_healthy
+  # account-service:
+  #   build:
+  #     context: ./account-service
+  #     dockerfile: src/AccountService.API/Dockerfile
+  #   ports:
+  #     - "5001:8080"
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ConnectionStrings__AccountDb: "User Id=accountservice;Password=AccountSvc123;Data Source=account-db:1521/XEPDB1;"
+  #     RabbitMq__Host: rabbitmq
+  #   depends_on:
+  #     account-db:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
 
-  transaction-service:
-    build:
-      context: ./transaction-service
-      dockerfile: src/TransactionService.API/Dockerfile
-    ports:
-      - "5003:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__TransactionDb: "Server=transaction-db;Database=TransactionServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
-    depends_on:
-      transaction-db:
-        condition: service_healthy
+  # transaction-service:
+  #   build:
+  #     context: ./transaction-service
+  #     dockerfile: src/TransactionService.API/Dockerfile
+  #   ports:
+  #     - "5003:8080"
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ConnectionStrings__TransactionDb: "Server=transaction-db;Database=TransactionServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
+  #     RabbitMq__Host: rabbitmq
+  #     Kafka__BootstrapServers: kafka:29092
+  #   depends_on:
+  #     transaction-db:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
 
-  loan-service:
-    build:
-      context: ./loan-service
-      dockerfile: src/LoanService.API/Dockerfile
-    ports:
-      - "5004:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__LoanDb: "Server=loan-db;Database=LoanServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
-    depends_on:
-      loan-db:
-        condition: service_healthy
+  # loan-service:
+  #   build:
+  #     context: ./loan-service
+  #     dockerfile: src/LoanService.API/Dockerfile
+  #   ports:
+  #     - "5004:8080"
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ConnectionStrings__LoanDb: "mongodb://loan-db:27017/LoanServiceDb"
+  #     RabbitMq__Host: rabbitmq
+  #   depends_on:
+  #     loan-db:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
 
-  notification-service:
-    build:
-      context: ./notification-service
-      dockerfile: src/NotificationService.API/Dockerfile
-    ports:
-      - "5005:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__NotificationDb: "Server=notification-db;Database=NotificationServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
-    depends_on:
-      notification-db:
-        condition: service_healthy
+  # notification-service:
+  #   build:
+  #     context: ./notification-service
+  #     dockerfile: src/NotificationService.API/Dockerfile
+  #   ports:
+  #     - "5005:8080"
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     Cassandra__Host: notification-db
+  #     Cassandra__Port: "9042"
+  #     Cassandra__Keyspace: notification_service
+  #     RabbitMq__Host: rabbitmq
+  #     Kafka__BootstrapServers: kafka:29092
+  #   depends_on:
+  #     notification-db:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
 
-  payment-service:
-    build:
-      context: ./payment-service
-      dockerfile: src/PaymentService.API/Dockerfile
-    ports:
-      - "5006:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__PaymentDb: "Server=payment-db;Database=PaymentServiceDb;User Id=sa;Password=Banking@123!;TrustServerCertificate=True;"
-    depends_on:
-      payment-db:
-        condition: service_healthy
+  # payment-service:
+  #   build:
+  #     context: ./payment-service
+  #     dockerfile: src/PaymentService.API/Dockerfile
+  #   ports:
+  #     - "5006:8080"
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ConnectionStrings__CosmosDb: "AccountEndpoint=https://payment-db:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD3x8mAhwOAiBgbsDjh4==;"
+  #     RabbitMq__Host: rabbitmq
+  #   depends_on:
+  #     payment-db:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
 
-  # ── API Gateway (single entry point for all clients) ───────────────────────
+  # # ── API Gateway ────────────────────────────────────────────────────────────
 
-  api-gateway:
-    build:
-      context: ./api-gateway
-      dockerfile: src/ApiGateway/Dockerfile
-    ports:
-      - "5000:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ReverseProxy__Clusters__identity-cluster__Destinations__identity-1__Address: "http://identity-service:8080"
-      ReverseProxy__Clusters__account-cluster__Destinations__account-1__Address: "http://account-service:8080"
-      ReverseProxy__Clusters__transaction-cluster__Destinations__transaction-1__Address: "http://transaction-service:8080"
-      ReverseProxy__Clusters__loan-cluster__Destinations__loan-1__Address: "http://loan-service:8080"
-      ReverseProxy__Clusters__notification-cluster__Destinations__notification-1__Address: "http://notification-service:8080"
-      ReverseProxy__Clusters__payment-cluster__Destinations__payment-1__Address: "http://payment-service:8080"
-    depends_on:
-      - identity-service
-      - account-service
-      - transaction-service
-      - loan-service
-      - notification-service
-      - payment-service
+  # api-gateway:
+  #   build:
+  #     context: ./api-gateway
+  #     dockerfile: src/ApiGateway/Dockerfile
+  #   ports:
+  #     - "5000:8080"
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ReverseProxy__Clusters__identity-cluster__Destinations__identity-1__Address: "http://identity-service:8080"
+  #     ReverseProxy__Clusters__account-cluster__Destinations__account-1__Address: "http://account-service:8080"
+  #     ReverseProxy__Clusters__transaction-cluster__Destinations__transaction-1__Address: "http://transaction-service:8080"
+  #     ReverseProxy__Clusters__loan-cluster__Destinations__loan-1__Address: "http://loan-service:8080"
+  #     ReverseProxy__Clusters__notification-cluster__Destinations__notification-1__Address: "http://notification-service:8080"
+  #     ReverseProxy__Clusters__payment-cluster__Destinations__payment-1__Address: "http://payment-service:8080"
+  #   depends_on:
+  #     - identity-service
+  #     - account-service
+  #     - transaction-service
+  #     - loan-service
+  #     - notification-service
+  #     - payment-service
 
 volumes:
   identity-db-data:
@@ -209,3 +307,6 @@ volumes:
   loan-db-data:
   notification-db-data:
   payment-db-data:
+  rabbitmq-data:
+  kafka-data:
+  zookeeper-data:
