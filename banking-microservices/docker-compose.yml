@@ -84,8 +84,10 @@ services:
       retries: 10
 
   # AccountService  →  Oracle XE (enterprise banking core, COBOL migration path)
+  # platform: linux/amd64 required — Oracle XE has no ARM64 image; runs under Rosetta on Apple Silicon
   account-db:
     image: gvenzl/oracle-xe:21-slim
+    platform: linux/amd64
     environment:
       ORACLE_PASSWORD: "Oracle123"
       APP_USER: "accountservice"
@@ -99,7 +101,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 20
-      start_period: 180s  # Oracle XE takes ~2 min to start
+      start_period: 180s  # Oracle XE takes ~2–3 min on first start (Rosetta adds ~30s)
 
   # TransactionService  →  MSSQL + Outbox (ACID + reliable messaging)
   transaction-db:
@@ -151,21 +153,20 @@ services:
       start_period: 60s
 
   # PaymentService  →  CosmosDB Emulator (global distribution, multi-region writes)
+  # vnext-preview is the Linux/ARM64-compatible emulator (the :latest tag is AMD64-only)
   payment-db:
-    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview
     ports:
       - "8081:8081"
-      - "10250-10255:10250-10255"
     environment:
-      AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 10
       AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "true"
     volumes:
       - payment-db-data:/tmp/cosmos/appdata
     healthcheck:
-      test: ["CMD", "curl", "-f", "https://localhost:8081/_explorer/emulator.pem", "-k"]
-      interval: 30s
+      test: ["CMD", "curl", "-f", "https://localhost:8081/", "-k", "--silent", "--max-time", "5"]
+      interval: 15s
       timeout: 10s
-      retries: 10
+      retries: 15
       start_period: 60s
 
   # ══════════════════════════════════════════════════════════════════════════

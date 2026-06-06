@@ -23,6 +23,14 @@ public static class InfrastructureServiceRegistration
         var cosmosConnectionString = configuration.GetConnectionString("CosmosDb")
             ?? "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD3x8mAhwOAiBgbsDjh4==;";
 
+        // HttpClientFactory with SSL bypass for the emulator's self-signed cert.
+        // vnext-preview emulator uses a different cert than the legacy emulator.
+        // In production this factory is not registered — real CosmosDB uses valid TLS.
+        var httpHandler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
+
         services.AddSingleton(_ => new CosmosClient(cosmosConnectionString, new CosmosClientOptions
         {
             SerializerOptions = new CosmosSerializationOptions
@@ -30,6 +38,7 @@ public static class InfrastructureServiceRegistration
                 PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase,
             },
             ConnectionMode = ConnectionMode.Gateway, // required for emulator
+            HttpClientFactory = () => new HttpClient(httpHandler),
         }));
 
         services.AddSingleton<CosmosDbContext>();
