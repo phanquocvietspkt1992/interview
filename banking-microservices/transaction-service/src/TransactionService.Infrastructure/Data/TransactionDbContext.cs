@@ -1,8 +1,6 @@
 using MassTransit;
-using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.EntityFrameworkCore;
 using TransactionService.Domain.Entities;
-using TransactionService.Infrastructure.Outbox;
 using TransactionService.Infrastructure.Sagas;
 
 namespace TransactionService.Infrastructure.Data;
@@ -10,7 +8,7 @@ namespace TransactionService.Infrastructure.Data;
 public class TransactionDbContext(DbContextOptions<TransactionDbContext> options) : DbContext(options)
 {
     public DbSet<Transaction> Transactions => Set<Transaction>();
-    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<Outbox.OutboxMessage> OutboxMessages => Set<Outbox.OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,7 +27,7 @@ public class TransactionDbContext(DbContextOptions<TransactionDbContext> options
             entity.Ignore(t => t.DomainEvents);
         });
 
-        modelBuilder.Entity<OutboxMessage>(entity =>
+        modelBuilder.Entity<Outbox.OutboxMessage>(entity =>
         {
             entity.HasKey(o => o.Id);
             entity.Property(o => o.EventType).IsRequired().HasMaxLength(512);
@@ -38,7 +36,14 @@ public class TransactionDbContext(DbContextOptions<TransactionDbContext> options
             entity.HasIndex(o => new { o.ProcessedAt, o.RetryCount });
         });
 
-        // MassTransit saga state — managed by MassTransit's SagaClassMap
-        modelBuilder.ApplyConfiguration(new TransferSagaStateMap());
+        modelBuilder.Entity<TransferSagaState>(entity =>
+        {
+            entity.ToTable("TransferSagaStates");
+            entity.HasKey(s => s.CorrelationId);
+            entity.Property(s => s.CurrentState).HasMaxLength(64).IsRequired();
+            entity.Property(s => s.FailureReason).HasMaxLength(500);
+            entity.Property(s => s.Amount).HasPrecision(18, 4);
+            entity.HasIndex(s => s.TransactionId);
+        });
     }
 }

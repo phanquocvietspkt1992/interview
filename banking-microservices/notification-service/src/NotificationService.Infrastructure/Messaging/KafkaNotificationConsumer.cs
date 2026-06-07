@@ -90,7 +90,7 @@ public sealed class KafkaNotificationConsumer(
         var evt = JsonSerializer.Deserialize<TransactionCompletedAuditEvent>(json)!;
         return Notification.Create(
             evt.FromAccountId,
-            NotificationChannel.InApp,
+            NotificationChannel.Push,
             "Transfer Completed",
             $"Your transfer of {evt.Amount:C} has been completed successfully. Reference: {evt.TransactionId}",
             evt.FromAccountId.ToString());
@@ -101,7 +101,7 @@ public sealed class KafkaNotificationConsumer(
         var evt = JsonSerializer.Deserialize<TransactionFailedAuditEvent>(json)!;
         return Notification.Create(
             evt.TransactionId, // using transactionId as a proxy for customerId in this demo
-            NotificationChannel.InApp,
+            NotificationChannel.Push,
             "Transfer Failed",
             $"Your transfer failed: {evt.Reason}. Please contact support if this is unexpected.",
             evt.TransactionId.ToString());
